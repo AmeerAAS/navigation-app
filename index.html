@@ -3,33 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MY Nav | Malaysia Route & Navigation</title>
+    <title>MY Nav | Live GPS Navigation</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Tailwind CSS for modern UI -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         #map { height: 100vh; width: 100vw; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.4); opacity: 0.2; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .user-gps-marker {
+            position: relative;
+        }
+        .user-gps-marker::before {
+            content: '';
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            top: -8px;
+            left: -8px;
+            background-color: rgba(37, 99, 235, 0.4);
+            border-radius: 50%;
+            animation: pulse-ring 2s infinite ease-in-out;
+        }
     </style>
 </head>
 <body class="bg-slate-100 font-sans overflow-hidden">
 
+    <!-- Active Navigation Header Banner -->
+    <div id="navBanner" class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-[1001] w-[92%] max-w-lg bg-slate-900/95 backdrop-blur-md text-white rounded-2xl shadow-2xl border border-slate-700 p-4 transition-all duration-300">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div id="navTurnIcon" class="bg-blue-600 p-3 rounded-xl flex items-center justify-center text-white">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </div>
+                <div>
+                    <h2 id="navInstruction" class="font-bold text-base leading-snug">Proceed along route</h2>
+                    <p id="navSubInstruction" class="text-xs text-blue-400 font-semibold mt-0.5">Next maneuver in <span id="navNextDist">0 m</span></p>
+                </div>
+            </div>
+            <button onclick="stopNavigation()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-3 py-2 rounded-lg shadow">
+                Exit Nav
+            </button>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-800 text-center text-xs">
+            <div>
+                <span class="text-slate-400 block text-[10px] uppercase">Live Speed</span>
+                <span id="navSpeed" class="font-bold text-emerald-400">0 km/h</span>
+            </div>
+            <div>
+                <span class="text-slate-400 block text-[10px] uppercase">Remaining</span>
+                <span id="navRemDist" class="font-bold text-blue-400">0 km</span>
+            </div>
+            <div>
+                <span class="text-slate-400 block text-[10px] uppercase">Accuracy</span>
+                <span id="navAccuracy" class="font-bold text-amber-400">±0 m</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Floating Navigation Control Panel -->
-    <div class="fixed top-4 left-4 z-[1000] w-full max-w-sm bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
+    <div id="controlPanel" class="fixed top-4 left-4 z-[1000] w-full max-w-sm bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
         <!-- Header -->
         <div class="bg-slate-900 text-white p-4 flex items-center justify-between">
             <div class="flex items-center space-x-2">
                 <div class="bg-blue-600 p-2 rounded-lg">
                     <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
                     </svg>
                 </div>
                 <div>
-                    <h1 class="font-bold text-base leading-none">MY Nav</h1>
-                    <span class="text-xs text-slate-400 font-medium">Malaysia Route & Navigation</span>
+                    <h1 class="font-bold text-base leading-none">MY Nav Live GPS</h1>
+                    <span class="text-xs text-slate-400 font-medium">Esri Maps • Auto Rerouting</span>
                 </div>
             </div>
             <span class="bg-emerald-500/20 text-emerald-400 text-xs px-2 py-1 rounded font-semibold border border-emerald-500/30">MY</span>
@@ -39,7 +90,7 @@
             
             <!-- Quick Destination Shortcuts -->
             <div>
-                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Quick Destination (Malaysia Cities)</label>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Quick Malaysia Destination</label>
                 <select id="quickDest" class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-lg p-2.5 focus:ring-blue-500 focus:border-blue-500">
                     <option value="">-- Choose Quick Landmark --</option>
                     <option value="3.1579,101.7116">KLCC, Kuala Lumpur</option>
@@ -57,8 +108,8 @@
             <div class="relative">
                 <div class="flex items-center space-x-2">
                     <span class="w-3 h-3 bg-emerald-500 rounded-full flex-shrink-0"></span>
-                    <input type="text" id="startInput" placeholder="Origin (e.g. Current Location or KLCC)" class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-lg p-2.5 pl-3 focus:ring-blue-500 focus:border-blue-500">
-                    <button onclick="useGPS()" title="Use Current GPS" class="p-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-slate-600">
+                    <input type="text" id="startInput" placeholder="Live GPS Location" class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-lg p-2.5 pl-3 focus:ring-blue-500 focus:border-blue-500">
+                    <button onclick="requestGPS()" title="Acquire Live GPS" class="p-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg text-blue-600 flex-shrink-0">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     </button>
                 </div>
@@ -68,17 +119,17 @@
             <div class="relative">
                 <div class="flex items-center space-x-2">
                     <span class="w-3 h-3 bg-rose-500 rounded-full flex-shrink-0"></span>
-                    <input type="text" id="destInput" placeholder="Destination (e.g. Johor Bahru)" class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-lg p-2.5 pl-3 focus:ring-blue-500 focus:border-blue-500">
+                    <input type="text" id="destInput" placeholder="Destination (Address or Click Map)" class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-lg p-2.5 pl-3 focus:ring-blue-500 focus:border-blue-500">
                 </div>
             </div>
 
-            <!-- Routing Mode Selection -->
+            <!-- Routing Preferences -->
             <div>
-                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Routing Mode</label>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Routing Preference</label>
                 <div class="grid grid-cols-3 gap-2">
                     <button onclick="setRoutingMode('fastest')" id="btn-fastest" class="route-btn active bg-blue-50 text-blue-700 border-2 border-blue-600 font-semibold text-xs py-2 px-1 rounded-lg flex flex-col items-center justify-center transition-all">
                         <svg class="w-4 h-4 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        Highway/Fast
+                        Expressway
                     </button>
                     <button onclick="setRoutingMode('avoid_tolls')" id="btn-avoid_tolls" class="route-btn bg-slate-50 text-slate-600 border border-slate-200 font-semibold text-xs py-2 px-1 rounded-lg flex flex-col items-center justify-center hover:bg-slate-100 transition-all">
                         <svg class="w-4 h-4 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
@@ -91,18 +142,25 @@
                 </div>
             </div>
 
-            <!-- Calculate Button -->
-            <button onclick="calculateRoute()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all duration-200 flex items-center justify-center space-x-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span>Calculate Best Route</span>
-            </button>
+            <!-- Action Buttons -->
+            <div class="space-y-2">
+                <button onclick="calculateRoute()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all duration-200 flex items-center justify-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+                    <span>Calculate Best Route</span>
+                </button>
 
-            <!-- Route Summary & Results -->
+                <button id="startNavBtn" onclick="startLiveGPSNavigation()" class="hidden w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-emerald-500/30 transition-all duration-200 flex items-center justify-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path></svg>
+                    <span>Start Live GPS Navigation</span>
+                </button>
+            </div>
+
+            <!-- Route Summary Results -->
             <div id="routeResults" class="hidden space-y-3 pt-2 border-t border-slate-200">
                 <div class="bg-slate-900 text-white p-3 rounded-xl">
                     <div class="flex justify-between items-center mb-1">
                         <span class="text-xs text-slate-400 font-semibold uppercase">Trip Summary</span>
-                        <span id="tollBadge" class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold">PLUS Highway Route</span>
+                        <span id="tollBadge" class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold">PLUS Expressway</span>
                     </div>
                     <div class="grid grid-cols-3 gap-2 text-center mt-2">
                         <div class="bg-slate-800 p-2 rounded-lg">
@@ -120,10 +178,10 @@
                     </div>
                 </div>
 
-                <!-- Turn-by-Turn Directions -->
+                <!-- Directions List -->
                 <div>
-                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Turn-by-Turn Directions</h3>
-                    <div id="instructionsList" class="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar text-xs text-slate-700"></div>
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Turn-by-Turn Maneuvers</h3>
+                    <div id="instructionsList" class="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar text-xs text-slate-700"></div>
                 </div>
             </div>
 
@@ -131,7 +189,7 @@
 
         <!-- Footer -->
         <div class="p-2.5 bg-slate-100 border-t border-slate-200 text-center text-[10px] text-slate-500">
-            Powered by OpenStreetMap, Leaflet & OSRM • OpenShift Ready
+            Esri Maps • Live Geolocation API • OSRM Router
         </div>
     </div>
 
@@ -142,21 +200,29 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // Initialize Map centered on Kuala Lumpur, Malaysia
-        const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 11);
+        // Initialize Map centered on Kuala Lumpur
+        const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
-}).addTo(map);
+        // Esri World Street Map Tiles (No API key required)
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, NAVTEQ, DeLorme'
+        }).addTo(map);
 
-        let startMarker, destMarker, routePolyline;
-        let startCoords = [3.1390, 101.6869]; // Default KL
+        let userGpsMarker, destMarker, routePolyline;
+        let currentGpsCoords = [3.1390, 101.6869]; // Default KL
         let destCoords = null;
         let selectedMode = 'fastest';
+        let currentRouteData = null;
+        let watchPositionId = null;
+        let isNavActive = false;
+        let isRecalculating = false;
+        let speechSynth = window.speechSynthesis;
+        let lastSpokenInstruction = "";
+        const OFF_ROUTE_THRESHOLD_METERS = 50;
 
-        // Predefined Malaysia Landmark Coordinates
+        // Predefined Malaysia Landmarks
         const landmarks = {
             "3.1579,101.7116": "KLCC, Kuala Lumpur",
             "2.9264,101.6964": "Putrajaya Cyberjaya",
@@ -168,14 +234,14 @@
             "3.8126,103.3256": "Kuantan, Pahang"
         };
 
-        // Quick Select Handler
+        // Quick Destination Dropdown
         document.getElementById('quickDest').addEventListener('change', function(e) {
             if (!e.target.value) return;
             const [lat, lng] = e.target.value.split(',').map(Number);
             setDestination(lat, lng, landmarks[e.target.value]);
         });
 
-        // Set Destination Helper
+        // Set Destination Marker
         function setDestination(lat, lng, label) {
             destCoords = [lat, lng];
             document.getElementById('destInput').value = label || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
@@ -184,21 +250,21 @@
             destMarker = L.marker([lat, lng], {
                 icon: L.divIcon({
                     className: 'custom-div-icon',
-                    html: "<div style='background-color:#ef4444;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.4);'></div>",
-                    iconSize: [16, 16],
-                    iconAnchor: [8, 8]
+                    html: "<div style='background-color:#ef4444;width:18px;height:18px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);'></div>",
+                    iconSize: [18, 18],
+                    iconAnchor: [9, 9]
                 })
             }).addTo(map).bindPopup("Destination: " + (label || "Selected Location")).openPopup();
 
-            map.flyTo([lat, lng], 12);
+            map.flyTo([lat, lng], 13);
         }
 
-        // Map Click Event to Set Destination
+        // Click on Map to set Destination
         map.on('click', function(e) {
-            setDestination(e.latlng.lat, e.latlng.lng, `Location (${e.latlng.lat.toFixed(3)}, ${e.latlng.lng.toFixed(3)})`);
+            setDestination(e.latlng.lat, e.latlng.lng, `Destination (${e.latlng.lat.toFixed(3)}, ${e.latlng.lng.toFixed(3)})`);
         });
 
-        // Mode Switching
+        // Routing Mode Toggle
         function setRoutingMode(mode) {
             selectedMode = mode;
             document.querySelectorAll('.route-btn').forEach(btn => {
@@ -211,125 +277,272 @@
             activeBtn.classList.add('bg-blue-50', 'text-blue-700', 'border-2', 'border-blue-600');
         }
 
-        // Use Browser GPS Location
-        function useGPS() {
+        // Initialize Continuous Real-Time GPS Tracking
+        function requestGPS() {
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(position => {
-                    startCoords = [position.coords.latitude, position.coords.longitude];
-                    document.getElementById('startInput').value = "My Location (GPS)";
-                    
-                    if (startMarker) map.removeLayer(startMarker);
-                    startMarker = L.marker(startCoords, {
-                        icon: L.divIcon({
-                            className: 'custom-div-icon',
-                            html: "<div style='background-color:#10b981;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.4);'></div>",
-                            iconSize: [16, 16],
-                            iconAnchor: [8, 8]
-                        })
-                    }).addTo(map).bindPopup("Start: GPS Location");
-
-                    map.flyTo(startCoords, 13);
-                }, () => {
-                    alert("Unable to fetch GPS position. Defaulting to Kuala Lumpur.");
-                });
+                    updateUserGPSPosition(position);
+                    document.getElementById('startInput').value = "Live GPS Location";
+                    map.flyTo(currentGpsCoords, 15);
+                }, error => {
+                    alert("GPS location permission denied or unavailable. Please enable location services.");
+                }, { enableHighAccuracy: true });
+            } else {
+                alert("Geolocation is not supported by your device/browser.");
             }
         }
 
-        // Calculate Route via OSRM Engine
+        // Update User Position Marker
+        function updateUserGPSPosition(position) {
+            currentGpsCoords = [position.coords.latitude, position.coords.longitude];
+            
+            if (!userGpsMarker) {
+                userGpsMarker = L.marker(currentGpsCoords, {
+                    icon: L.divIcon({
+                        className: 'user-gps-marker',
+                        html: "<div style='background-color:#2563eb;width:18px;height:18px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);'></div>",
+                        iconSize: [18, 18],
+                        iconAnchor: [9, 9]
+                    })
+                }).addTo(map).bindPopup("Your Current Position");
+            } else {
+                userGpsMarker.setLatLng(currentGpsCoords);
+            }
+
+            // Real-time speed & accuracy display
+            const speedKmh = position.coords.speed ? (position.coords.speed * 3.6).toFixed(0) : "0";
+            const accuracyM = position.coords.accuracy ? position.coords.accuracy.toFixed(0) : "0";
+            
+            document.getElementById('navSpeed').innerText = `${speedKmh} km/h`;
+            document.getElementById('navAccuracy').innerText = `±${accuracyM} m`;
+
+            if (isNavActive && currentRouteData) {
+                map.panTo(currentGpsCoords, { animate: true });
+                evaluateLiveManeuvers();
+            }
+        }
+
+        // Address Geocoding via Nominatim
+        async function geocodeLocation(query) {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=my&q=${encodeURIComponent(query)}`;
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data && data.length > 0) {
+                    return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+                }
+            } catch (e) {
+                console.error("Geocoding error", e);
+            }
+            return null;
+        }
+
+        // Calculate Route from Live GPS or Typed Origin
         async function calculateRoute() {
-            if (!destCoords) {
-                alert("Please select or click a destination on the map first.");
+            const destVal = document.getElementById('destInput').value.trim();
+
+            if (!destVal && !destCoords) {
+                alert("Please select or enter a destination.");
                 return;
             }
 
-            // Define profile based on user preference
-            let profile = 'driving';
-            let extraParams = '';
-
-            if (selectedMode === 'shortest') {
-                extraParams = '&annotations=distance,duration';
+            if (destVal && (!destCoords || !destVal.includes(destCoords[0].toFixed(3)))) {
+                const foundDest = await geocodeLocation(destVal);
+                if (foundDest) {
+                    setDestination(foundDest[0], foundDest[1], destVal);
+                } else {
+                    alert("Could not locate destination address.");
+                    return;
+                }
             }
 
-            const url = `https://router.project-osrm.org/route/v1/${profile}/${startCoords[1]},${startCoords[0]};${destCoords[1]},${destCoords[0]}?overview=full&geometries=geojson&steps=true${extraParams}`;
+            const url = `https://router.project-osrm.org/route/v1/driving/${currentGpsCoords[1]},${currentGpsCoords[0]};${destCoords[1]},${destCoords[0]}?overview=full&geometries=geojson&steps=true`;
 
             try {
                 const response = await fetch(url);
                 const data = await response.json();
 
                 if (!data.routes || data.routes.length === 0) {
-                    alert("Route calculation failed. Try another point.");
+                    alert("No driving route found.");
                     return;
                 }
 
-                const route = data.routes[0];
-                const distanceKm = (route.distance / 1000).toFixed(1);
-                const durationMins = Math.round(route.duration / 60);
+                currentRouteData = data.routes[0];
+                const distanceKm = (currentRouteData.distance / 1000).toFixed(1);
+                const durationMins = Math.round(currentRouteData.duration / 60);
 
-                // Estimate Malaysia Highway Toll Costs (~RM 0.13 per km on major highways)
+                // Toll Estimation Logic for Malaysia
                 let estToll = 0;
                 let tollText = "Likely Toll Free";
                 if (selectedMode !== 'avoid_tolls' && distanceKm > 15) {
                     estToll = (distanceKm * 0.136).toFixed(2);
                     tollText = "RM " + estToll;
-                    document.getElementById('tollBadge').innerText = "PLUS / Expressway Route";
+                    document.getElementById('tollBadge').innerText = "PLUS / Expressway";
                     document.getElementById('tollBadge').className = "text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold";
                 } else {
-                    document.getElementById('tollBadge').innerText = "Federal Route / Toll Free";
+                    document.getElementById('tollBadge').innerText = "Federal / Toll Free";
                     document.getElementById('tollBadge').className = "text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-bold";
                 }
 
-                // Render Summary Results
                 document.getElementById('resDistance').innerText = `${distanceKm} km`;
                 document.getElementById('resTime').innerText = durationMins > 60 ? `${Math.floor(durationMins/60)}h ${durationMins%60}m` : `${durationMins} mins`;
                 document.getElementById('resToll').innerText = tollText;
                 document.getElementById('routeResults').classList.remove('hidden');
+                document.getElementById('startNavBtn').classList.remove('hidden');
 
-                // Render Turn-by-Turn Steps
+                // Render Maneuvers List
                 const stepsContainer = document.getElementById('instructionsList');
                 stepsContainer.innerHTML = '';
-                route.legs[0].steps.forEach((step, idx) => {
-                    if (step.maneuver.instruction || step.name) {
-                        const div = document.createElement('div');
-                        div.className = "bg-slate-50 p-2 rounded border border-slate-200 flex items-start space-x-2";
-                        div.innerHTML = `
-                            <span class="font-bold text-slate-400 text-[10px]">${idx + 1}.</span>
-                            <div class="flex-1">
-                                <p class="font-medium text-slate-800">${step.maneuver.type} ${step.name ? 'onto <b>' + step.name + '</b>' : ''}</p>
-                                <span class="text-[10px] text-slate-400">${(step.distance / 1000).toFixed(2)} km</span>
-                            </div>
-                        `;
-                        stepsContainer.appendChild(div);
-                    }
+                currentRouteData.legs[0].steps.forEach((step, idx) => {
+                    const div = document.createElement('div');
+                    div.className = "bg-slate-50 p-2 rounded border border-slate-200 flex items-start space-x-2";
+                    div.innerHTML = `
+                        <span class="font-bold text-slate-400 text-[10px]">${idx + 1}.</span>
+                        <div class="flex-1">
+                            <p class="font-medium text-slate-800">${step.maneuver.type} ${step.name ? 'onto <b>' + step.name + '</b>' : ''}</p>
+                            <span class="text-[10px] text-slate-400">${(step.distance / 1000).toFixed(2)} km</span>
+                        </div>
+                    `;
+                    stepsContainer.appendChild(div);
                 });
 
-                // Plot Line on Map
+                // Plot Polyline
                 if (routePolyline) map.removeLayer(routePolyline);
-                const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                const coordinates = currentRouteData.geometry.coordinates.map(coord => [coord[1], coord[0]]);
                 
                 routePolyline = L.polyline(coordinates, {
                     color: selectedMode === 'avoid_tolls' ? '#10b981' : '#2563eb',
                     weight: 6,
-                    opacity: 0.8
+                    opacity: 0.85
                 }).addTo(map);
 
-                // Zoom Map to Fit Complete Route
                 map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
 
             } catch (err) {
                 console.error(err);
-                alert("Error connecting to OSRM routing engine.");
+                alert("Failed to compute route.");
             }
         }
 
-        // Set initial start marker
-        startMarker = L.marker(startCoords, {
-            icon: L.divIcon({
-                className: 'custom-div-icon',
-                html: "<div style='background-color:#10b981;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.4);'></div>",
-                iconSize: [16, 16],
-                iconAnchor: [8, 8]
-            })
-        }).addTo(map).bindPopup("Start: Kuala Lumpur");
+        // Voice Guidance Speech Output
+        function speakGuidance(text) {
+            if (speechSynth && text !== lastSpokenInstruction) {
+                speechSynth.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1.0;
+                speechSynth.speak(utterance);
+                lastSpokenInstruction = text;
+            }
+        }
+
+        // Perpendicular distance calculation to detect off-route deviation
+        function pointToSegmentDistance(p, a, b) {
+            const pPt = map.latLngToLayerPoint(p);
+            const aPt = map.latLngToLayerPoint(a);
+            const bPt = map.latLngToLayerPoint(b);
+
+            const l2 = aPt.distanceTo(bPt) ** 2;
+            if (l2 === 0) return pPt.distanceTo(aPt);
+
+            let t = ((pPt.x - aPt.x) * (bPt.x - aPt.x) + (pPt.y - aPt.y) * (bPt.y - aPt.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+
+            const projection = L.point(
+                aPt.x + t * (bPt.x - aPt.x),
+                aPt.y + t * (bPt.y - aPt.y)
+            );
+
+            const projLatLng = map.layerPointToLatLng(projection);
+            return map.distance(p, projLatLng);
+        }
+
+        function getDistanceFromRoute(userLatLng) {
+            if (!currentRouteData || !currentRouteData.geometry) return 0;
+            
+            const coords = currentRouteData.geometry.coordinates.map(c => L.latLng(c[1], c[0]));
+            let minDistance = Infinity;
+
+            for (let i = 0; i < coords.length - 1; i++) {
+                const dist = pointToSegmentDistance(userLatLng, coords[i], coords[i + 1]);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                }
+            }
+            return minDistance;
+        }
+
+        // Start Navigation
+        function startLiveGPSNavigation() {
+            if (!currentRouteData) return;
+
+            isNavActive = true;
+            document.getElementById('controlPanel').classList.add('hidden');
+            document.getElementById('navBanner').classList.remove('hidden');
+
+            speakGuidance("Starting real-time live GPS navigation");
+
+            if ("geolocation" in navigator) {
+                watchPositionId = navigator.geolocation.watchPosition(
+                    position => updateUserGPSPosition(position),
+                    error => console.error("GPS Error:", error),
+                    { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+                );
+            }
+        }
+
+        // Evaluate Live Navigation & Automatic Recalculation
+        async function evaluateLiveManeuvers() {
+            if (!currentRouteData || !isNavActive || isRecalculating) return;
+
+            const userLatLng = L.latLng(currentGpsCoords[0], currentGpsCoords[1]);
+            const distToDestM = map.distance(userLatLng, L.latLng(destCoords[0], destCoords[1]));
+            document.getElementById('navRemDist').innerText = (distToDestM / 1000).toFixed(1) + " km";
+
+            if (distToDestM < 30) {
+                speakGuidance("You have arrived at your destination");
+                stopNavigation();
+                alert("Arrived at destination!");
+                return;
+            }
+
+            // Off-Route Reroute Trigger
+            const deviationDistance = getDistanceFromRoute(userLatLng);
+            if (deviationDistance > OFF_ROUTE_THRESHOLD_METERS) {
+                isRecalculating = true;
+                speakGuidance("You are off route. Recalculating.");
+                
+                document.getElementById('navInstruction').innerText = "Recalculating route...";
+                document.getElementById('navSubInstruction').innerText = `Deviated by ${deviationDistance.toFixed(0)}m`;
+
+                await calculateRoute();
+                isRecalculating = false;
+                return;
+            }
+
+            const steps = currentRouteData.legs[0].steps;
+            if (steps && steps.length > 0) {
+                const currentStep = steps[0];
+                const instructionText = `${currentStep.maneuver.type} ${currentStep.name ? 'onto ' + currentStep.name : ''}`;
+                
+                document.getElementById('navInstruction').innerText = instructionText || "Proceed along route";
+                speakGuidance(instructionText);
+            }
+        }
+
+        // Exit Navigation
+        function stopNavigation() {
+            isNavActive = false;
+            if (watchPositionId) {
+                navigator.geolocation.clearWatch(watchPositionId);
+                watchPositionId = null;
+            }
+            document.getElementById('navBanner').classList.add('hidden');
+            document.getElementById('controlPanel').classList.remove('hidden');
+            if (speechSynth) speechSynth.cancel();
+        }
+
+        // Start GPS on page load
+        requestGPS();
     </script>
 </body>
 </html>
